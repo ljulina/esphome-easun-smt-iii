@@ -1,0 +1,31 @@
+# OS and editor files
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# ESPHome build output and secrets
+.esphome/
+secrets.yaml
+*.ota.bin
+*.factory.bin
+*.elf
+*.map
+*.log
+
+# Local environment files
+.env
+.env.*
+
+# Temporary files
+tmp/
+temp/
+*.tmp

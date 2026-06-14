@@ -1,0 +1,122 @@
+# Protocol sniffer for the EASUN SMT-III / Solar Plug-RWB1 communication.
+#
+# ⚠️ WARNING: Solar Plug-RWB1 ver. -06R only ⚠️
+#
+# This is NOT a generic RX/TX sniffer. The wiring and RJ45 pinout below are
+# tied to the Solar Plug-RWB1 ver. -06R. Other board revisions may differ.
+#
+# Two RS232-to-TTL converters tap the communication cable between the inverter
+# and the Solar Plug IN PARALLEL and are read-only (only RX is connected on the
+# ESP side), so the sniffer does not change the live communication:
+#   - uart_inverter (D7): data sent by the inverter  (inverter -> Solar Plug)
+#   - uart_solar    (D6): data sent by the Solar Plug (Solar Plug -> inverter)
+#
+# Each captured frame is logged twice: RAW (printable ASCII, non-printable
+# bytes shown as ".") and HEX. Use it for protocol analysis and reverse
+# engineering of commands that the component does not support yet.
+#
+# See docs/SNIFFER.md for wiring and usage.
+
+esphome:
+  name: rs232-sniffer
+  friendly_name: rs232-sniffer
+
+esp8266:
+  board: nodemcuv2
+
+# Enable logging
+logger:
+  baud_rate: 0
+  level: DEBUG
+  #logs:
+  #  uart: NONE
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  platform: esphome
+  password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails.
+  # Change this password before flashing.
+  ap:
+    ssid: "Rs232-Sniffer Fallback Hotspot"
+    password: "changeme123"
+
+# Enable Web server
+web_server:
+   port: 80
+
+captive_portal:
+
+uart:
+  # Data sent by the inverter (inverter -> Solar Plug)
+  - id: uart_inverter
+    baud_rate: 2400
+    rx_pin: D7
+    debug:
+      direction: RX
+      dummy_receiver: true
+      after:
+        timeout: 50ms
+      sequence:
+        - lambda: |-
+            std::string hex = "";
+            std::string raw = "";
+            char buf[4];
+
+            for (auto b : bytes) {
+              sprintf(buf, "%02X ", b);
+              hex += buf;
+              if (b >= 32 && b <= 126) {
+                raw += (char)b;
+              } else {
+                raw += '.';
+              }
+            }
+
+            if (!hex.empty()) {
+              hex.pop_back();  // remove the trailing space
+            }
+
+            ESP_LOGD("inverter_tx", "RAW: %s", raw.c_str());
+            ESP_LOGD("inverter_tx", "HEX: %s", hex.c_str());
+
+  # Data sent by the Solar Plug (Solar Plug -> inverter)
+  - id: uart_solar
+    baud_rate: 2400
+    rx_pin: D6
+    debug:
+      direction: RX
+      dummy_receiver: true
+      after:
+        timeout: 50ms
+      sequence:
+        - lambda: |-
+            std::string hex = "";
+            std::string raw = "";
+            char buf[4];
+
+            for (auto b : bytes) {
+              sprintf(buf, "%02X ", b);
+              hex += buf;
+              if (b >= 32 && b <= 126) {
+                raw += (char)b;
+              } else {
+                raw += '.';
+              }
+            }
+
+            if (!hex.empty()) {
+              hex.pop_back();  // remove the trailing space
+            }
+
+            ESP_LOGD("solar_tx", "RAW: %s", raw.c_str());
+            ESP_LOGD("solar_tx", "HEX: %s", hex.c_str());

@@ -1,0 +1,507 @@
+substitutions:
+  name: easun3
+  device_description: "Monitoring and control of the EASUN SMT-III inverter over RS232 (external component)"
+  tx_pin: GPIO1
+  rx_pin: GPIO3
+
+# RJ45 on Solar Plug-RWB1 ver. -06R (inverter RS232 TX/RX labels)
+# ⚠️ WARNING: Solar Plug-RWB1 ver. -06R only ⚠️
+# P2 - 12V
+# P3 - TX  -> MAX3232 RX -> ESP32 GPIO3 (RX)
+# P5 - GND
+# P6 - RX  <- MAX3232 TX <- ESP32 GPIO1 (TX)
+#
+
+esphome:
+  name: ${name}
+  friendly_name: ${name}
+  comment: ${device_description}
+  min_version: 2024.6.0
+  project:
+    name: ljulina.esphome-easun-smt-iii
+    version: "0.1.0"
+
+esp32:
+  board: nodemcu-32s
+  framework:
+    type: esp-idf
+
+logger:
+  baud_rate: 0
+  level: DEBUG
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+ota:
+  platform: esphome
+  password: !secret ota_password
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+web_server:
+  port: 80
+
+captive_portal:
+
+external_components:
+  - source:
+      type: local
+      path: components
+
+uart:
+  - id: uart_0
+    baud_rate: 2400
+    tx_pin: ${tx_pin}
+    rx_pin: ${rx_pin}
+
+# Required if you want to use sync_inverter_datetime (the current time is taken
+# from here and sent to the inverter). Without the time: component the button
+# only logs a warning and sends nothing. Set the time zone as needed.
+time:
+  - platform: sntp
+    id: ha_time
+    timezone: Europe/Prague
+
+easun_smt_iii:
+  id: easun
+  uart_id: uart_0
+  time_id: ha_time
+
+  # "Sync Inverter Datetime From HA" button - when pressed it sends the current
+  # time from the time: component to the inverter via the ^S???DAT<YYMMDDhhmmss>
+  # command. In HA you can create an automation that presses it e.g. daily at 03:00.
+  sync_inverter_datetime:
+    name: "Sync Inverter Datetime From HA"
+  clear_fault_information:
+    name: "Clear Fault Information"
+  reset_factory_setting:
+    name: "Reset Factory Setting"
+  clear_power_generation:
+    name: "Clear Power Generation"
+  # Each query has its own interval, but only 1 command runs on the UART at a
+  # time: query -> response/timeout -> throttle -> next query.
+  poll_interval: 10s
+  response_timeout: 3s
+
+  output_voltage:
+    name: "Output Voltage"
+  output_frequency:
+    name: "Output Frequency"
+  output_apparent_power:
+    name: "Output Apparent Power"
+  output_active_power:
+    name: "Output Active Power"
+  load_percentage:
+    name: "Load Percentage"
+  bus_voltage:
+    name: "Bus Voltage"
+  rated_power:
+    name: "Rated Power"
+  inductor_current:
+    name: "Inductor Current"
+  status:
+    name: "Status"
+
+  # All queries run through a single queue: query -> response/timeout -> throttle -> next query.
+  # The HOP/HGRID/HBAT/... commands are already built into the component; you don't need to
+  # list them in YAML unless you want to change them. Typically only intervals and timeout/throttle are tuned here.
+  # hgrid_poll_interval: 60s
+  hgrid_tx_delay: 200ms
+  # hbat_poll_interval: 10s
+  # hsts_poll_interval: 60s
+  # hpv_poll_interval: 10s
+  # htemp_poll_interval: 10s
+  # heep1_poll_interval: 60s
+  ac_voltage:
+    name: "AC Voltage"
+  ac_frequency:
+    name: "AC Frequency"
+  high_point_of_mains:
+    name: "High Point Of Mains"
+  low_point_of_mains:
+    name: "Low Point Of Mains"
+  high_frequency_of_mains:
+    name: "High Frequency Of Mains"
+  low_frequency_of_mains:
+    name: "Low Frequency Of Mains"
+#  hgrid_6:                              # could not be identified
+#    name: "HGRID 6"
+#  hgrid_7:                              # could not be identified
+#    name: "HGRID 7"
+  #hgrid_rated_power:
+  #  name: "HGRID Rated Power"
+#  hgrid_9:                              # could not be identified
+#    name: "HGRID 9"
+
+  battery_number_in_series:
+    name: "Battery Number In Series"
+  battery_voltage:
+    name: "Battery Voltage"
+  battery_capacity:
+    name: "Battery Capacity"
+  battery_charging_current:
+    name: "Battery Charging Current"
+  battery_discharging_current:
+    name: "Battery Discharging Current"
+  hbat_bus_voltage:
+    name: "HBAT BUS Voltage"
+#  hbat_6:                              # could not be identified
+#    name: "HBAT 6"
+#  hbat_7:                              # could not be identified
+#    name: "HBAT 7"
+
+#  hsts_0:                              # could not be identified
+#    name: "HSTS 0"
+#  hsts_1:                              # could not be identified
+#    name: "HSTS 1"
+#  hsts_2:                              # could not be identified
+#    name: "HSTS 2"
+#  hsts_3:                              # could not be identified
+#    name: "HSTS 3"
+
+  pv_voltage:
+    name: "PV Voltage"
+  pv_current:
+    name: "PV Current"
+  pv_power:
+    name: "PV Power"
+  pv_max_voltage:
+    name: "PV Max Voltage"
+  pv_temperature:
+    name: "PV Temperature"
+
+  inverter_temperature:
+    name: "Inverter Temperature"
+  boost_temperature:
+    name: "Boost Temperature"
+  pv_temperature_2:
+    name: "PV Temperature 2"
+#  htemp_3:                              # could not be identified
+#    name: "HTEMP 3"
+#  htemp_4:                              # could not be identified
+#    name: "HTEMP 4"
+  fan_1_speed:
+    name: "Fan 1 Speed"
+  fan_2_speed:
+    name: "Fan 2 Speed"
+#  htemp_7:                              # could not be identified
+#    name: "HTEMP 7"
+
+#  hpv_3:                              # could not be identified
+#    name: "HPV 3"
+#  hpv_4:                              # could not be identified
+#    name: "HPV 4"
+#  hpv_5:                              # could not be identified
+#    name: "HPV 5"
+  pv_max_power:
+    name: "PV Max Power"
+
+  output_source_priority_setting:
+    name: "Output Source Priority Setting"
+  # Writable number entity (MNCHGC<NNN>). Also reads the state from HEEP1 field 1.
+  # Component defaults: 10..120 A, step 10, unit "A", icon mdi:current-dc.
+  # Everything can be overridden in YAML (min_value / max_value / step / unit_of_measurement / icon).
+  max_charging_current:
+    name: "Max Charging Current"
+  # Writable number entity (BMSSRC<NNN>). Also reads the state from HEEP1 field 13.
+  # Component defaults: 5..100 %, step 5, unit "%", icon mdi:battery-heart.
+  inverter_startup_battery_capacity:
+    name: "Inverter Startup Battery Capacity"
+  maximum_mains_charging_current_settings:
+    name: "Maximum Mains Charging Current Setting"
+
+  # --- Writable select entities (readback from the composite fields HEEP1[3] and HEEP1[4]) ---
+  # All icons and other defaults are already in the component; in YAML `name:` is enough.
+  grid_working_range:
+    name: "Grid Working Range"
+  grid_connection_protocol_type_setting:
+    name: "Grid Connection Protocol Type Setting"
+  battery_type:
+    name: "Battery Type"
+  overload_auto_restart:
+    name: "Overload Auto Restart"
+  over_temperature_auto_restart:
+    name: "Over Temperature Auto Restart"
+  buzzer_on:
+    name: "Buzzer On"
+  backlight_on:
+    name: "Backlight On"
+  display_auto_return_homepage:
+    name: "Display Auto Return Homepage"
+  input_source_detection_prompt_sound:
+    name: "Input Source Detection Prompt Sound"
+  # Note: ECO Mode is write-only for now - we didn't find a HEEP1 position for readback.
+  eco_mode:
+    name: "ECO Mode"
+  # Note: Fault Information Storage is write-only for now - we didn't find a
+  # position in any HEEP* to read the current state. The setting is published
+  # only optimistically; after boot the ESP doesn't know the inverter state.
+  fault_information_storage:
+    name: "Fault Information Storage"
+  # Note: write-only for now - we didn't find where to read the current state.
+  # Calling it in the app ends with an error.
+#  remote_activation_of_the_second_output:
+#    name: "Remote Activation Of The Second Output"
+  # Note: write-only for now - we didn't find where to read the current state.
+  # Calling it in the app ends with an error.
+#  remote_power_on:
+#    name: "Remote Power On"
+  rated_frequency:
+    name: "Rated Frequency"
+  rated_voltage:
+    name: "Rated Voltage Setting"
+  charger_priority:
+    name: "Charger Priority"
+#  heep1_7:                              # could not be identified
+#    name: "HEEP1 7"
+#  heep1_8:                              # could not be identified
+#    name: "HEEP1 8"
+# turning BMS Function Enable Setting to On also changes the settings:
+#  - Battery Type Setting -> 3 (LIA)
+#  - Battery Float Charging Voltage Setting (V) -> 056.4 V
+  bms_function_enable_setting:
+    name: "BMS Function Enable Setting"
+  bms_lock_machine_battery_capacity:
+    name: "BMS Lock Machine Battery Capacity"
+  restore_mains_charging_battery_capacity:
+    name: "Restore Mains Charging Battery Capacity"
+  restore_battery_discharging_battery_capacity:
+    name: "Restore Battery Discharging Battery Capacity"
+  battery_constant_charging_voltage_setting:
+    name: "Battery Constant Charging Voltage Setting"
+  battery_float_charging_voltage_setting:
+    name: "Battery Float Charging Voltage Setting"
+  battery_low_voltage_protection:
+    name: "Battery Low Voltage Protection"
+#  heep1_17:                              # could not be identified
+#    name: "HEEP1 17"
+#  heep1_18:                              # could not be identified
+#    name: "HEEP1 18"
+
+#  hbms1_0:                              # could not be identified
+#    name: "HBMS1 0"
+#  hbms1_1:                              # could not be identified
+#    name: "HBMS1 1"
+  bms_discharge_voltage:
+    name: "BMS Discharge Voltage"
+  bms_charge_voltage:
+    name: "BMS Charge Voltage"
+  bms_charge_current:
+    name: "BMS Charge Current"
+  bms_battery_capacity:
+    name: "BMS Battery Capacity"
+#  hbms1_6:                              # could not be identified
+#    name: "HBMS1 6"
+#  hbms1_7:                              # could not be identified
+#    name: "HBMS1 7"
+#  hbms1_8:                              # could not be identified
+#    name: "HBMS1 8"
+#  hbms1_9:                              # could not be identified
+#    name: "HBMS1 9"
+
+  system_time:
+    name: "System Time"
+  daily_power_generation_total_pv:
+    name: "Daily Power Generation Total PV"
+  month_power_generation_total_pv:
+    name: "Month Power Generation Total PV"
+  year_power_generation_total_pv:
+    name: "Year Power Generation Total PV"
+  total_power_generation_total_pv:
+    name: "Total Power Generation Total PV"
+#  hgen_6:                              # could not be identified
+#    name: "HGEN 6"
+
+#  hpvb_0:                              # could not be identified
+#    name: "HPVB 0"
+#  hpvb_1:                              # could not be identified
+#    name: "HPVB 1"
+#  hpvb_2:                              # could not be identified
+#    name: "HPVB 2"
+#  hpvb_3:                              # could not be identified
+#    name: "HPVB 3"
+#  hpvb_4:                              # could not be identified
+#    name: "HPVB 4"
+#  hpvb_5:                              # could not be identified
+#    name: "HPVB 5"
+
+  dual_remote_switch:
+    name: "Dual Remote Switch"
+  second_shutdown_voltage:
+    name: "Second Shutdown Voltage"
+  parallel_shutdown_battery_soc_settings:
+    name: "Parallel Shutdown Battery SOC Setting"
+  low_battery_alarm_voltage_setting:
+    name: "Low Battery Alarm Voltage Setting"
+  return_to_mains_voltage:
+    name: "Return To Mains Voltage"
+  return_to_battery_voltage:
+    name: "Return To Battery Voltage"
+  battery_equalization_mode_enable_setting:
+    name: "Battery Equalization Mode Enable Setting"
+  battery_equalization_voltage_settings:
+    name: "Battery Equalization Voltage Setting"
+  battery_equalization_time_settings:
+    name: "Battery Equalization Time Setting"
+  battery_equalization_timeout_settings:
+    name: "Battery Equalization Timeout Setting"
+  battery_equalization_interval_settings:
+    name: "Battery Equalization Interval Setting"
+  ac_charging_time_start:
+    name: "AC Charging Time Start"
+  ac_charging_time_stop:
+    name: "AC Charging Time Stop"
+  ac_output_time_start:
+    name: "AC Output Scheduled Time Start"
+  ac_output_time_stop:
+    name: "AC Output Scheduled Time Stop"
+  restore_second_output_delay_time_settings:
+    name: "Restore Second Output Delay Time Setting"
+  output_time_start:
+    name: "Output Time Start"
+  output_time_stop:
+    name: "Output Time Stop"
+  restore_second_output_battery_voltage_settings:
+    name: "Restore Second Output Battery Voltage Setting"
+  # Both values are read from HEEP2[16] as a 5-digit field: first 2 digits = %,
+  # last 3 digits = min. E.g. 95010 => 95 % and 10 min.
+  restore_second_output_battery_capacity_settings:
+    name: "Restore Second Output Battery Capacity Setting"
+  second_output_discharge_time_settings:
+    name: "Second Output Discharge Time Setting"
+
+  software_version:
+    name: "Software Version"
+  software_date:
+    name: "Software Date"
+  device_type:
+    name: "Device Type"
+#  himsg1_2:                              # could not be identified
+#    name: "HIMSG1 2"
+
+# for BMS - not tested
+#  hbms2_0:                              # could not be identified
+#    name: "HBMS2 0"
+#  hbms2_1:                              # could not be identified
+#    name: "HBMS2 1"
+#  hbms2_2:                              # could not be identified
+#    name: "HBMS2 2"
+#  hbms2_3:                              # could not be identified
+#    name: "HBMS2 3"
+#  hbms2_4:                              # could not be identified
+#    name: "HBMS2 4"
+#  hbms2_5:                              # could not be identified
+#    name: "HBMS2 5"
+#  hbms2_6:                              # could not be identified
+#    name: "HBMS2 6"
+#  hbms2_7:                              # could not be identified
+#    name: "HBMS2 7"
+#  hbms2_8:                              # could not be identified
+#    name: "HBMS2 8"
+
+# for BMS - probably cell voltages - not tested
+#  hbms3_0:                              # could not be identified
+#    name: "HBMS3 0"
+#  hbms3_1:                              # could not be identified
+#    name: "HBMS3 1"
+#  hbms3_2:                              # could not be identified
+#    name: "HBMS3 2"
+#  hbms3_3:                              # could not be identified
+#    name: "HBMS3 3"
+#  hbms3_4:                              # could not be identified
+#    name: "HBMS3 4"
+#  hbms3_5:                              # could not be identified
+#    name: "HBMS3 5"
+#  hbms3_6:                              # could not be identified
+#    name: "HBMS3 6"
+#  hbms3_7:                              # could not be identified
+#    name: "HBMS3 7"
+#  hbms3_8:                              # could not be identified
+#    name: "HBMS3 8"
+#  hbms3_9:                              # could not be identified
+#    name: "HBMS3 9"
+#  hbms3_10:                              # could not be identified
+#    name: "HBMS3 10"
+#  hbms3_11:                              # could not be identified
+#    name: "HBMS3 11"
+#  hbms3_12:                              # could not be identified
+#    name: "HBMS3 12"
+#  hbms3_13:                              # could not be identified
+#    name: "HBMS3 13"
+#  hbms3_14:                              # could not be identified
+#    name: "HBMS3 14"
+#  hbms3_15:                              # could not be identified
+#    name: "HBMS3 15"
+#  hbms3_16:                              # could not be identified
+#    name: "HBMS3 16"
+
+#  heep3_0:                              # could not be identified
+#    name: "HEEP3 0"
+#  heep3_1:                              # could not be identified
+#    name: "HEEP3 1"
+#  heep3_2:                              # could not be identified
+#    name: "HEEP3 2"
+  ct_zero_power:
+    name: "CT Zero Power"
+  restart_voltage_after_low_power:
+    name: "Restart Voltage After Low Power"
+  grid_connected_power:
+    name: "Grid connected Power"
+    # PGFP uses 5 digits and the real maximum differs by inverter model.
+    # On the tested inverter max. 6200 W is accepted; more powerful models may allow more.
+    # If HA won't allow a higher value, adjust max_value for your specific inverter.
+    min_value: 200
+    max_value: 6200
+    step: 100
+  discharge_current_limit:
+    name: "Discharge Current Limit"
+#  heep3_7:                              # could not be identified
+#    name: "HEEP3 7"
+#  heep3_8:                              # could not be identified
+#    name: "HEEP3 8"
+#  heep3_9:                              # could not be identified
+#    name: "HEEP3 9"
+#  heep3_10:                              # could not be identified
+#    name: "HEEP3 10"
+  battery_energy_grid_feeding_time_start:
+    name: "Battery Energy Grid Feeding Time Start"
+  battery_energy_grid_feeding_time_stop:
+    name: "Battery Energy Grid Feeding Time Stop"
+#  heep3_12:                              # could not be identified
+#    name: "HEEP3 12"
+
+#DATA: (00 B1010010 11721000000 00000000000000.
+#  hsts2_0:                              # could not be identified
+#    name: "HSTS2 0"
+#  hsts2_1:                              # could not be identified
+#    name: "HSTS2 1"
+#  hsts2_2:                              # could not be identified
+#    name: "HSTS2 2"
+#  hsts2_3:                              # could not be identified
+#    name: "HSTS2 3"
+
+#DATA: (00.0 00.0 00.0 +00000 +00000 +00000 +00000 +00000 +00000 000000000000000000000.
+#  hctmsg1_0:                              # could not be identified
+#    name: "HCTMSG1 0"
+#  hctmsg1_1:                              # could not be identified
+#    name: "HCTMSG1 1"
+#  hctmsg1_2:                              # could not be identified
+#    name: "HCTMSG1 2"
+#  hctmsg1_3:                              # could not be identified
+#    name: "HCTMSG1 3"
+#  hctmsg1_4:                              # could not be identified
+#    name: "HCTMSG1 4"
+#  hctmsg1_5:                              # could not be identified
+#    name: "HCTMSG1 5"
+#  hctmsg1_6:                              # could not be identified
+#    name: "HCTMSG1 6"
+#  hctmsg1_7:                              # could not be identified
+#    name: "HCTMSG1 7"
+#  hctmsg1_8:                              # could not be identified
+#    name: "HCTMSG1 8"
+#  hctmsg1_9:                              # could not be identified
+#    name: "HCTMSG1 9"
