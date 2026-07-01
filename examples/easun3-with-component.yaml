@@ -19,7 +19,7 @@ esphome:
   min_version: 2024.6.0
   project:
     name: ljulina.esphome-easun-smt-iii
-    version: "0.1.0"
+    version: "0.1.1"
 
 esp32:
   board: nodemcu-32s

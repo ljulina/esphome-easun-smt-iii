@@ -44,7 +44,7 @@ external_components:
   - source:
       type: git
       url: https://github.com/ljulina/esphome-easun-smt-iii
-      ref: v0.1.0
+      ref: v0.1.1
     components: [easun_smt_iii]
 ```
 
@@ -54,7 +54,7 @@ The example YAML also sets the ESPHome project version shown in Home Assistant:
 esphome:
   project:
     name: ljulina.esphome-easun-smt-iii
-    version: "0.1.0"
+    version: "0.1.1"
 ```
 
 The UART configuration is:
