@@ -560,7 +560,7 @@ When adding a newly decoded field:
 
 ## Sniffer Documentation
 
-Most of these notes were collected with a passive serial sniffer that listens to the communication between the inverter and the Solar Plug. The wiring and usage are described in [`SNIFFER.md`](SNIFFER.md), and the ESPHome configuration is in [`examples/rs232-sniffer.yaml`](../examples/rs232-sniffer.yaml). Only publish captures that are useful, safe to share, and do not include private or device-specific information.
+Most of these notes were collected with a passive serial sniffer that listens to the communication between the inverter and the Solar Plug. The wiring and usage are described in [`SNIFFER.md`](SNIFFER.md), and the ESPHome configuration is in [`examples/rs232-sniffer.yaml`](../examples/rs232-sniffer.yaml). When sharing captures, include only what is useful and safe to share, and remove private or device-specific information.
 
 ## Limitations
 

@@ -27,9 +27,3 @@ This document lists the assets included in the repository.
 - [`hardware/case/esp32-rs232-power-box.stl`](../hardware/case/esp32-rs232-power-box.stl) - box STL.
 - [`hardware/case/esp32-rs232-power-box-cap.stl`](../hardware/case/esp32-rs232-power-box-cap.stl) - cap STL.
 - [`hardware/case/esp32-rs232-power-box.skp`](../hardware/case/esp32-rs232-power-box.skp) - editable SketchUp source file.
-
-## Possible Future Additions
-
-- Additional RJ45 photo with wire colors.
-- More photos of the ESP32 enclosure.
-- Final rendered schematic in SVG or PNG.

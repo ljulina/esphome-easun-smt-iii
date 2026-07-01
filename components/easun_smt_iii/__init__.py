@@ -34,6 +34,7 @@ from esphome.const import (
     DEVICE_CLASS_POWER,
     DEVICE_CLASS_TEMPERATURE,
     DEVICE_CLASS_VOLTAGE,
+    ENTITY_CATEGORY_DIAGNOSTIC,
     STATE_CLASS_MEASUREMENT,
     STATE_CLASS_TOTAL_INCREASING,
 )
@@ -176,6 +177,8 @@ CONF_SYNC_INVERTER_DATETIME = "sync_inverter_datetime"
 CONF_CLEAR_FAULT_INFORMATION = "clear_fault_information"
 CONF_RESET_FACTORY_SETTING = "reset_factory_setting"
 CONF_CLEAR_POWER_GENERATION = "clear_power_generation"
+CONF_DROPPED_RESPONSE_COUNT = "dropped_response_count"
+CONF_DROPPED_RESPONSE_LAST = "dropped_response_last"
 
 MUCHGC_OPTIONS = ["2 A", "10 A", "20 A", "30 A", "40 A", "50 A", "60 A"]
 
@@ -1443,6 +1446,18 @@ CONFIG_DICT = {
     cv.Optional(CONF_CLEAR_POWER_GENERATION): button.button_schema(
         ClearPowerGenerationButton, icon="mdi:solar-power-variant-outline"
     ),
+    # Optional diagnostic entities. These make dropped/desynchronized responses
+    # visible in HA without requiring a live ESPHome log window.
+    cv.Optional(CONF_DROPPED_RESPONSE_COUNT): sensor.sensor_schema(
+        accuracy_decimals=0,
+        icon="mdi:counter",
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+        state_class=STATE_CLASS_TOTAL_INCREASING,
+    ),
+    cv.Optional(CONF_DROPPED_RESPONSE_LAST): text_sensor.text_sensor_schema(
+        icon="mdi:message-alert-outline",
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+    ),
 }
 
 for query in QUERY_DEFS:
@@ -1489,6 +1504,14 @@ async def to_code(config):
     if CONF_CLEAR_POWER_GENERATION in config:
         btn = await button.new_button(config[CONF_CLEAR_POWER_GENERATION])
         await register_parented(btn, var)
+
+    if CONF_DROPPED_RESPONSE_COUNT in config:
+        s = await sensor.new_sensor(config[CONF_DROPPED_RESPONSE_COUNT])
+        cg.add(var.set_dropped_response_count_sensor(s))
+
+    if CONF_DROPPED_RESPONSE_LAST in config:
+        t = await text_sensor.new_text_sensor(config[CONF_DROPPED_RESPONSE_LAST])
+        cg.add(var.set_dropped_response_last_text_sensor(t))
 
     for query in QUERY_DEFS:
         query_id = query["id"]

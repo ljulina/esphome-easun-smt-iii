@@ -4,6 +4,8 @@ ESPHome external component and hardware notes for monitoring and controlling an 
 
 This repository was created as a practical guide while connecting one specific inverter to Home Assistant. It may help other users, but every inverter and Solar Plug board revision must be verified before wiring anything.
 
+**Latest release:** [v0.1.0](https://github.com/ljulina/esphome-easun-smt-iii/releases/tag/v0.1.0)
+
 ![Assembled ESP32, MAX3232, and power supply in a 3D printed enclosure](assets/photos/esp32-rs232-power-box-assembled.jpeg)
 
 *Assembled example for Solar Plug-RWB1 ver. -06R. Always verify your own hardware before connecting anything.*

@@ -92,6 +92,8 @@ class EasunSmtIiiComponent : public uart::UARTDevice, public Component {
   void set_numeric_sensor(uint8_t kind, uint8_t index, sensor::Sensor *s);
   void set_text_sensor(uint8_t kind, uint8_t index, text_sensor::TextSensor *s);
   void set_system_time_text_sensor(text_sensor::TextSensor *t) { this->system_time_text_sensor_ = t; }
+  void set_dropped_response_count_sensor(sensor::Sensor *s) { this->dropped_response_count_sensor_ = s; }
+  void set_dropped_response_last_text_sensor(text_sensor::TextSensor *t) { this->dropped_response_last_text_sensor_ = t; }
   void queue_muchgc_current_setting(uint16_t amps);
   void queue_output_source_priority_setting(uint8_t code);
   // Generic writable 3-digit parameter: "<prefix>%03u" + CRC + '\r'.
@@ -307,6 +309,7 @@ class EasunSmtIiiComponent : public uart::UARTDevice, public Component {
   void publish_numeric_(ExpectedResponse kind, uint8_t index, const std::vector<std::string> &parts, float scale = 1.0f,
                         bool round_to_accuracy = true);
   void publish_text_(ExpectedResponse kind, uint8_t index, const std::vector<std::string> &parts);
+  void record_dropped_response_(const std::string &reason);
   // Helper for the readback of Enable/Disable selects. Handles both composite
   // fields (offset = character position in parts[idx]) and standalone
   // single-character fields (offset = 0).
@@ -340,6 +343,9 @@ class EasunSmtIiiComponent : public uart::UARTDevice, public Component {
   std::array<std::array<sensor::Sensor *, MAX_QUERY_FIELDS>, QUERY_COUNT> numeric_sensors_{};
   std::array<std::array<text_sensor::TextSensor *, MAX_QUERY_FIELDS>, QUERY_COUNT> text_sensors_{};
   text_sensor::TextSensor *system_time_text_sensor_{nullptr};
+  sensor::Sensor *dropped_response_count_sensor_{nullptr};
+  text_sensor::TextSensor *dropped_response_last_text_sensor_{nullptr};
+  uint32_t dropped_response_count_{0};
   MuchgcCurrentSelect *maximum_mains_charging_current_select_{nullptr};
   OutputSourcePrioritySelect *output_source_priority_select_{nullptr};
   OnOffCommandSelect *dual_remote_switch_select_{nullptr};

@@ -82,6 +82,10 @@ easun_smt_iii:
     name: "Reset Factory Setting"
   clear_power_generation:
     name: "Clear Power Generation"
+  dropped_response_count:
+    name: "Dropped Response Count"
+  dropped_response_last:
+    name: "Dropped Response Last"
   # Each query has its own interval, but only 1 command runs on the UART at a
   # time: query -> response/timeout -> throttle -> next query.
   poll_interval: 10s

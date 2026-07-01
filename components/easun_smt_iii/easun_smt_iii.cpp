@@ -47,6 +47,34 @@ void split_paren_line(const std::string &printable, std::vector<std::string> &pa
   }
 }
 
+// True when the first `count` characters of `s` are all decimal digits. Used to
+// sanity-check structural fields (e.g. the YYMMDD date in HGEN) so a desynced or
+// merged response from another command is not parsed as if it were valid.
+bool field_has_leading_digits(const std::string &s, size_t count) {
+  if (s.size() < count) {
+    return false;
+  }
+  for (size_t i = 0; i < count; i++) {
+    if (!isdigit(static_cast<unsigned char>(s[i]))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool parse_float_field(const std::string &s, float *value) {
+  if (value == nullptr || s.empty()) {
+    return false;
+  }
+  char *end = nullptr;
+  const float parsed = strtof(s.c_str(), &end);
+  if (end == s.c_str() || (end != nullptr && *end != '\0')) {
+    return false;
+  }
+  *value = parsed;
+  return true;
+}
+
 float round_to_decimals(float value, int8_t decimals) {
   if (decimals < 0) {
     return value;
@@ -60,7 +88,11 @@ void publish_number_state(esphome::number::Number *number, const std::vector<std
   if (number == nullptr || parts.size() <= index) {
     return;
   }
-  number->publish_state(round_to_decimals(strtof(parts[index].c_str(), nullptr), decimals));
+  float value;
+  if (!parse_float_field(parts[index], &value)) {
+    return;
+  }
+  number->publish_state(round_to_decimals(value, decimals));
 }
 
 bool extract_option_code3_(const std::string &value, char code[4]) {
@@ -1432,11 +1464,25 @@ void EasunSmtIiiComponent::try_send_next_query_() {
 
 void EasunSmtIiiComponent::setup() {
   this->rx_buffer_.reserve(64);
-  for (uint8_t i = 0; i < QUERY_COUNT; i++) {
+  if (this->dropped_response_count_sensor_ != nullptr) {
+    this->dropped_response_count_sensor_->publish_state(this->dropped_response_count_);
+  }
+  // Register poll intervals in an order that separates similarly-shaped
+  // responses when several intervals fire at the same time. This does not
+  // change entity IDs or YAML keys; it only affects the enqueue order.
+  static constexpr std::array<ExpectedResponse, QUERY_COUNT> poll_order{{
+      ExpectedResponse::HOP,     ExpectedResponse::HGRID,  ExpectedResponse::HTEMP,
+      ExpectedResponse::HPV,     ExpectedResponse::HBAT,   ExpectedResponse::HSTS,
+      ExpectedResponse::HGEN,    ExpectedResponse::HPVB,   ExpectedResponse::HBMS1,
+      ExpectedResponse::HIMSG1,  ExpectedResponse::HEEP1,  ExpectedResponse::HSTS2,
+      ExpectedResponse::HEEP3,   ExpectedResponse::HCTMSG1, ExpectedResponse::HEEP2,
+      ExpectedResponse::QPRTL,   ExpectedResponse::HBMS2,  ExpectedResponse::HBMS3,
+  }};
+  for (const auto kind : poll_order) {
+    const uint8_t i = static_cast<uint8_t>(kind);
     if (!this->query_enabled_[i] || this->query_interval_ms_[i] == 0 || this->query_command_[i].empty()) {
       continue;
     }
-    auto kind = static_cast<ExpectedResponse>(i);
     auto interval_name = std::string("poll_") + this->query_name_(kind);
     this->set_interval(interval_name, this->query_interval_ms_[i], [this, kind]() { this->enqueue_query_(kind); });
   }
@@ -1487,7 +1533,13 @@ void EasunSmtIiiComponent::publish_numeric_(ExpectedResponse kind, uint8_t index
   if (sensor == nullptr) {
     return;
   }
-  float value = strtof(parts[index].c_str(), nullptr) * scale;
+  float raw_value;
+  if (!parse_float_field(parts[index], &raw_value)) {
+    this->record_dropped_response_(std::string(this->query_name_(kind)) + "[" + std::to_string(index) +
+                                   "]: non-numeric field '" + parts[index] + "', dropping value");
+    return;
+  }
+  float value = raw_value * scale;
   const int8_t decimals = round_to_accuracy ? sensor->get_accuracy_decimals() : -1;
   value = round_to_decimals(value, decimals);
   sensor->publish_state(value);
@@ -1502,6 +1554,17 @@ void EasunSmtIiiComponent::publish_text_(ExpectedResponse kind, uint8_t index, c
     return;
   }
   sensor->publish_state(parts[index]);
+}
+
+void EasunSmtIiiComponent::record_dropped_response_(const std::string &reason) {
+  ESP_LOGW(TAG, "%s", reason.c_str());
+  this->dropped_response_count_++;
+  if (this->dropped_response_count_sensor_ != nullptr) {
+    this->dropped_response_count_sensor_->publish_state(this->dropped_response_count_);
+  }
+  if (this->dropped_response_last_text_sensor_ != nullptr) {
+    this->dropped_response_last_text_sensor_->publish_state(reason);
+  }
 }
 
 void EasunSmtIiiComponent::publish_enable_disable_(EnableDisableSelect *sel, const std::string &field, size_t offset) {
@@ -1603,7 +1666,38 @@ void EasunSmtIiiComponent::process_line_(const std::string &raw) {
 
 void EasunSmtIiiComponent::process_hop_line_(const std::vector<std::string> &parts) {
   if (parts.size() < 9) {
-    ESP_LOGW(TAG, "HOP: only %u fields (typ. 9)", (unsigned) parts.size());
+    this->record_dropped_response_("HOP: only " + std::to_string(parts.size()) + " fields (typ. 9), dropping line");
+    return;
+  }
+  float output_voltage;
+  float output_frequency;
+  float output_apparent_power;
+  float output_active_power;
+  float load_percentage;
+  float bus_voltage;
+  float rated_power;
+  float output_current;
+  if (!parse_float_field(parts[0], &output_voltage) || !parse_float_field(parts[1], &output_frequency) ||
+      !parse_float_field(parts[2], &output_apparent_power) || !parse_float_field(parts[3], &output_active_power) ||
+      !parse_float_field(parts[4], &load_percentage) || !parse_float_field(parts[5], &bus_voltage) ||
+      !parse_float_field(parts[6], &rated_power) || !parse_float_field(parts[7], &output_current)) {
+    this->record_dropped_response_("HOP: non-numeric field in numeric payload, dropping line");
+    return;
+  }
+  if (output_voltage < 0.0f || output_voltage > 300.0f || output_frequency < 0.0f ||
+      (output_frequency > 0.0f && (output_frequency < 40.0f || output_frequency > 70.0f)) ||
+      output_apparent_power < 0.0f || output_active_power < 0.0f || load_percentage < 0.0f ||
+      load_percentage > 250.0f || bus_voltage < 0.0f || bus_voltage > 600.0f || rated_power < 100.0f ||
+      rated_power > 50000.0f || output_current < 0.0f || output_apparent_power > rated_power * 2.0f ||
+      output_active_power > rated_power * 2.0f) {
+    char reason[160];
+    snprintf(reason, sizeof(reason),
+             "HOP: implausible values (U=%.1fV f=%.1fHz P=%.0fW S=%.0fVA load=%.0f%% bus=%.1fV rated=%.0f), "
+             "dropping line",
+             output_voltage, output_frequency, output_active_power, output_apparent_power, load_percentage, bus_voltage,
+             rated_power);
+    this->record_dropped_response_(reason);
+    return;
   }
   this->publish_numeric_(ExpectedResponse::HOP, 0, parts);
   this->publish_numeric_(ExpectedResponse::HOP, 1, parts);
@@ -1618,7 +1712,8 @@ void EasunSmtIiiComponent::process_hop_line_(const std::vector<std::string> &par
 
 void EasunSmtIiiComponent::process_hgrid_line_(const std::vector<std::string> &parts) {
   if (parts.size() < 10) {
-    ESP_LOGW(TAG, "HGRID: only %u fields (typ. 10)", (unsigned) parts.size());
+    this->record_dropped_response_("HGRID: only " + std::to_string(parts.size()) + " fields (typ. 10), dropping line");
+    return;
   }
   for (uint8_t i = 0; i <= 8; i++) {
     this->publish_numeric_(ExpectedResponse::HGRID, i, parts);
@@ -1628,7 +1723,8 @@ void EasunSmtIiiComponent::process_hgrid_line_(const std::vector<std::string> &p
 
 void EasunSmtIiiComponent::process_hbat_line_(const std::vector<std::string> &parts) {
   if (parts.size() < 8) {
-    ESP_LOGW(TAG, "HBAT: only %u fields (typ. 8)", (unsigned) parts.size());
+    this->record_dropped_response_("HBAT: only " + std::to_string(parts.size()) + " fields (typ. 8), dropping line");
+    return;
   }
   for (uint8_t i = 0; i <= 5; i++) {
     this->publish_numeric_(ExpectedResponse::HBAT, i, parts);
@@ -1806,6 +1902,17 @@ void EasunSmtIiiComponent::process_hbms1_line_(const std::vector<std::string> &p
 }
 
 void EasunSmtIiiComponent::process_hgen_line_(const std::vector<std::string> &parts) {
+  // A valid HGEN response starts with a date (YYMMDD) followed by a time (HH:MM).
+  // If the structure does not match, the line is a desynchronized or merged
+  // response from another command. Publishing it would push foreign values into
+  // the PV energy counters (e.g. the date 260617, or CT constants like 2048 from
+  // HEEP3), so drop it instead.
+  if (parts.size() < 6 || !field_has_leading_digits(parts[0], 6) ||
+      parts[1].find(':') == std::string::npos) {
+    this->record_dropped_response_("HGEN: unexpected format (" + std::to_string(parts.size()) +
+                                   " fields), dropping line");
+    return;
+  }
   if (this->system_time_text_sensor_ != nullptr && parts.size() > 1) {
     const std::string &date = parts[0];
     const std::string &time = parts[1];
