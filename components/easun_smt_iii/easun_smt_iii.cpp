@@ -11,6 +11,7 @@
 #include "easun_checksum.h"
 #include "esphome/core/log.h"
 
+#include <inttypes.h>
 #include <cctype>
 #include <cmath>
 #include <cstdio>
@@ -73,6 +74,10 @@ bool parse_float_field(const std::string &s, float *value) {
   }
   *value = parsed;
   return true;
+}
+
+bool is_ack_or_nak_field(const std::string &field) {
+  return field.rfind("ACK", 0) == 0 || field.rfind("NAK", 0) == 0;
 }
 
 float round_to_decimals(float value, int8_t decimals) {
@@ -1483,22 +1488,22 @@ void EasunSmtIiiComponent::setup() {
     if (!this->query_enabled_[i] || this->query_interval_ms_[i] == 0 || this->query_command_[i].empty()) {
       continue;
     }
-    auto interval_name = std::string("poll_") + this->query_name_(kind);
-    this->set_interval(interval_name, this->query_interval_ms_[i], [this, kind]() { this->enqueue_query_(kind); });
+    this->set_interval(static_cast<uint32_t>(i), this->query_interval_ms_[i],
+                       [this, kind]() { this->enqueue_query_(kind); });
   }
 }
 
 void EasunSmtIiiComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "EASUN SMT-III");
   ESP_LOGCONFIG(TAG, "  RX routing: one command in flight, matched by sent query");
-  ESP_LOGCONFIG(TAG, "  Command throttle: %ums", this->command_throttle_ms_);
-  ESP_LOGCONFIG(TAG, "  Response timeout: %ums", this->response_timeout_ms_);
+  ESP_LOGCONFIG(TAG, "  Command throttle: %" PRIu32 "ms", this->command_throttle_ms_);
+  ESP_LOGCONFIG(TAG, "  Response timeout: %" PRIu32 "ms", this->response_timeout_ms_);
   for (uint8_t i = 0; i < QUERY_COUNT; i++) {
     if (!this->query_enabled_[i]) {
       continue;
     }
     auto kind = static_cast<ExpectedResponse>(i);
-    ESP_LOGCONFIG(TAG, "  %s interval: %ums", this->query_name_(kind), this->query_interval_ms_[i]);
+    ESP_LOGCONFIG(TAG, "  %s interval: %" PRIu32 "ms", this->query_name_(kind), this->query_interval_ms_[i]);
     ESP_LOGCONFIG(TAG, "  %s command: %s", this->query_name_(kind), this->query_command_[i].c_str());
   }
 }
@@ -1535,8 +1540,8 @@ void EasunSmtIiiComponent::publish_numeric_(ExpectedResponse kind, uint8_t index
   }
   float raw_value;
   if (!parse_float_field(parts[index], &raw_value)) {
-    this->record_dropped_response_(std::string(this->query_name_(kind)) + "[" + std::to_string(index) +
-                                   "]: non-numeric field '" + parts[index] + "', dropping value");
+    this->record_dropped_value_(std::string(this->query_name_(kind)) + "[" + std::to_string(index) +
+                                "]: non-numeric field '" + parts[index] + "', dropping value");
     return;
   }
   float value = raw_value * scale;
@@ -1567,6 +1572,13 @@ void EasunSmtIiiComponent::record_dropped_response_(const std::string &reason) {
   }
 }
 
+void EasunSmtIiiComponent::record_dropped_value_(const std::string &reason) {
+  ESP_LOGD(TAG, "%s", reason.c_str());
+  if (this->dropped_response_last_text_sensor_ != nullptr) {
+    this->dropped_response_last_text_sensor_->publish_state(reason);
+  }
+}
+
 void EasunSmtIiiComponent::publish_enable_disable_(EnableDisableSelect *sel, const std::string &field, size_t offset) {
   if (sel == nullptr || field.size() <= offset) {
     return;
@@ -1591,6 +1603,13 @@ void EasunSmtIiiComponent::process_line_(const std::string &raw) {
     return;
   }
 
+  std::vector<std::string> parts;
+  split_paren_line(printable, parts);
+  if (!parts.empty() && is_ack_or_nak_field(parts[0])) {
+    ESP_LOGD(TAG, "Ignoring write acknowledgement while waiting for read response: %s", printable.c_str());
+    return;
+  }
+
   if (!this->command_in_flight_) {
     ESP_LOGW(TAG, "RX line but no command in flight; ignored");
     return;
@@ -1600,9 +1619,6 @@ void EasunSmtIiiComponent::process_line_(const std::string &raw) {
 
   const ExpectedResponse kind = this->in_flight_query_;
   this->command_in_flight_ = false;
-
-  std::vector<std::string> parts;
-  split_paren_line(printable, parts);
 
   switch (kind) {
     case ExpectedResponse::HOP:
@@ -1740,6 +1756,10 @@ void EasunSmtIiiComponent::process_hsts_line_(const std::vector<std::string> &pa
 }
 
 void EasunSmtIiiComponent::process_hpv_line_(const std::vector<std::string> &parts) {
+  if (parts.size() < 9) {
+    this->record_dropped_response_("HPV: only " + std::to_string(parts.size()) + " fields (typ. 9), dropping line");
+    return;
+  }
   this->publish_numeric_(ExpectedResponse::HPV, 0, parts);
   this->publish_numeric_(ExpectedResponse::HPV, 1, parts);
   this->publish_numeric_(ExpectedResponse::HPV, 2, parts);
@@ -1752,6 +1772,10 @@ void EasunSmtIiiComponent::process_hpv_line_(const std::vector<std::string> &par
 }
 
 void EasunSmtIiiComponent::process_htemp_line_(const std::vector<std::string> &parts) {
+  if (parts.size() < 8) {
+    this->record_dropped_response_("HTEMP: only " + std::to_string(parts.size()) + " fields (typ. 8), dropping line");
+    return;
+  }
   for (uint8_t i = 0; i <= 6; i++) {
     this->publish_numeric_(ExpectedResponse::HTEMP, i, parts);
   }

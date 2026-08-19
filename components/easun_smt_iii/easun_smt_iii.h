@@ -310,6 +310,7 @@ class EasunSmtIiiComponent : public uart::UARTDevice, public Component {
                         bool round_to_accuracy = true);
   void publish_text_(ExpectedResponse kind, uint8_t index, const std::vector<std::string> &parts);
   void record_dropped_response_(const std::string &reason);
+  void record_dropped_value_(const std::string &reason);
   // Helper for the readback of Enable/Disable selects. Handles both composite
   // fields (offset = character position in parts[idx]) and standalone
   // single-character fields (offset = 0).
