@@ -174,7 +174,7 @@ const std::array<const char *, 4> &OutputSourcePrioritySelect::allowed_options()
   // Must match OUTPUT_SOURCE_PRIORITY_OPTIONS in __init__.py (ESPHome select options).
   static const std::array<const char *, 4> options{{"SUB - Solar - Utility - Battery",
                                                      "SBU - Solar - Battery - Utility",
-                                                     "SUF - Solar - Utility - Fast",
+                                                     "SUF - Solar - Utility - Feed",
                                                      "PEC - Priority Efficiency Center"}};
   return options;
 }
@@ -1760,6 +1760,12 @@ void EasunSmtIiiComponent::process_hpv_line_(const std::vector<std::string> &par
     this->record_dropped_response_("HPV: only " + std::to_string(parts.size()) + " fields (typ. 9), dropping line");
     return;
   }
+  // Observed HPV frames have a one-digit field followed by a decimal voltage.
+  // HOP and HGRID instead have multi-digit integer fields in both positions.
+  if (parts[5].size() > 1 && parts[6].find('.') == std::string::npos) {
+    this->record_dropped_response_("HPV: unexpected format for fields 5 and 6, dropping line");
+    return;
+  }
   this->publish_numeric_(ExpectedResponse::HPV, 0, parts);
   this->publish_numeric_(ExpectedResponse::HPV, 1, parts);
   this->publish_numeric_(ExpectedResponse::HPV, 2, parts);
@@ -1767,7 +1773,14 @@ void EasunSmtIiiComponent::process_hpv_line_(const std::vector<std::string> &par
   this->publish_text_(ExpectedResponse::HPV, 4, parts);
   this->publish_text_(ExpectedResponse::HPV, 5, parts);
   this->publish_numeric_(ExpectedResponse::HPV, 6, parts);
-  this->publish_numeric_(ExpectedResponse::HPV, 7, parts);
+
+  // Keep the observed short integer format for this unidentified field.
+  const auto &field = parts[7];
+  if (field.empty() || field.size() > 3 || !field_has_leading_digits(field, field.size())) {
+    this->record_dropped_value_("HPV[7]: unexpected format '" + field + "', dropping value");
+  } else {
+    this->publish_numeric_(ExpectedResponse::HPV, 7, parts);
+  }
   this->publish_numeric_(ExpectedResponse::HPV, 8, parts);
 }
 
@@ -1776,7 +1789,21 @@ void EasunSmtIiiComponent::process_htemp_line_(const std::vector<std::string> &p
     this->record_dropped_response_("HTEMP: only " + std::to_string(parts.size()) + " fields (typ. 8), dropping line");
     return;
   }
-  for (uint8_t i = 0; i <= 6; i++) {
+  // HOP and HGRID responses are longer and start with decimal voltage and frequency.
+  if (parts.size() > 8 && parts[0].find('.') != std::string::npos && parts[1].find('.') != std::string::npos) {
+    this->record_dropped_response_("HTEMP: unexpected decimal fields in a longer response, dropping line");
+    return;
+  }
+
+  constexpr float MAX_PV_TEMPERATURE_C = 150.0f;
+  float pv_temperature;
+  if (parse_float_field(parts[0], &pv_temperature) &&
+      (!std::isfinite(pv_temperature) || pv_temperature > MAX_PV_TEMPERATURE_C)) {
+    this->record_dropped_value_("HTEMP[0]: implausible PV temperature '" + parts[0] + "', dropping value");
+  } else {
+    this->publish_numeric_(ExpectedResponse::HTEMP, 0, parts);
+  }
+  for (uint8_t i = 1; i <= 6; i++) {
     this->publish_numeric_(ExpectedResponse::HTEMP, i, parts);
   }
   this->publish_text_(ExpectedResponse::HTEMP, 7, parts);

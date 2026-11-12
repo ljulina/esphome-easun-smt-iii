@@ -169,12 +169,14 @@ RAW: (070.0 00.3 00022 00000.0 00000 2 070.0 027 08500.
 | 0 | PV Voltage | V |
 | 1 | PV Current | A |
 | 2 | PV Power | W |
-| 3 | Unknown | Possibly accumulated or secondary PV value |
-| 4 | Unknown | Possibly accumulated or secondary PV value |
+| 3 | Unknown | Always `00000.0` in observations on SMT-III 6.2 kW |
+| 4 | Unknown | Always `00000` in observations on SMT-III 6.2 kW |
 | 5 | PV Operating Mode | Tentative enum |
-| 6 | PV Max Voltage | V |
-| 7 | PV Temperature | Celsius, tentative |
+| 6 | Unknown | V, tracks field `0` in daylight and reads `70.0` when field `0` is `0.0` at night |
+| 7 | Unknown | Observed value `27` on SMT-III 6.2 kW |
 | 8 | PV Max Power | W |
+
+The mobile app showed `BUS Voltage` at `361 V` while field `6` read `70.0 V`, and showed `PV Temperature` at `13 °C` while field `7` read `27`. The labels proposed for fields `3`, `4`, `6`, and `7` remain unconfirmed on the tested SMT-III 6.2 kW. [SMT 12KP report](https://github.com/ljulina/esphome-easun-smt-iii/issues/2)
 
 ### `HTEMP` - Temperatures And Fan Values
 

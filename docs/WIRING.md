@@ -79,6 +79,10 @@ The example ESPHome configuration uses:
 5. Confirm RS232 side and TTL side of the MAX3232 are not swapped.
 6. Keep the first power-up supervised.
 
+## Community Hardware Examples
+
+This modification reuses hardware from the original dongle and requires irreversible changes. It is unverified by this project. [Photos and pinout shared by tizbac](https://github.com/ljulina/esphome-easun-smt-iii/issues/4)
+
 ## Images
 
 - Assembled unit: [`assets/photos/esp32-rs232-power-box-assembled.jpeg`](../assets/photos/esp32-rs232-power-box-assembled.jpeg)

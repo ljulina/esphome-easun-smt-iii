@@ -37,14 +37,14 @@ external_components:
       path: components
 ```
 
-Alternatively, install the component directly from GitHub (use a release tag for a fixed version):
+Alternatively, install the component directly from GitHub. When pinning a release tag, use the example YAML from that release.
 
 ```yaml
 external_components:
   - source:
       type: git
       url: https://github.com/ljulina/esphome-easun-smt-iii
-      ref: v0.1.2
+      ref: v0.1.3
     components: [easun_smt_iii]
 ```
 
@@ -54,7 +54,7 @@ The example YAML also sets the ESPHome project version shown in Home Assistant:
 esphome:
   project:
     name: ljulina.esphome-easun-smt-iii
-    version: "0.1.2"
+    version: "0.1.3"
 ```
 
 The UART configuration is:
@@ -66,6 +66,10 @@ uart:
     tx_pin: GPIO1
     rx_pin: GPIO3
 ```
+
+Existing YAML can use `pv_max_voltage` and `pv_temperature` as aliases for `hpv_6` and `hpv_7`. Use the new keys and names from the example to show these unidentified readings in Home Assistant.
+
+If a Home Assistant automation selects `SUF - Solar - Utility - Fast`, update the option to `SUF - Solar - Utility - Feed`.
 
 ## Secrets
 

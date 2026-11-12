@@ -40,7 +40,7 @@ from esphome.const import (
 )
 
 DEPENDENCIES = ["uart"]
-AUTO_LOAD = ["sensor", "text_sensor", "select", "number", "button"]
+AUTO_LOAD = ["sensor", "text_sensor", "select", "number", "button", "time"]
 
 easun_smt_iii_ns = cg.esphome_ns.namespace("easun_smt_iii")
 EasunSmtIiiComponent = easun_smt_iii_ns.class_(
@@ -186,7 +186,7 @@ MUCHGC_OPTIONS = ["2 A", "10 A", "20 A", "30 A", "40 A", "50 A", "60 A"]
 OUTPUT_SOURCE_PRIORITY_OPTIONS = [
     "SUB - Solar - Utility - Battery", 
     "SBU - Solar - Battery - Utility", 
-    "SUF - Solar - Utility - Fast", 
+    "SUF - Solar - Utility - Feed",
     "PEC - Priority Efficiency Center"
 ]
 
@@ -696,20 +696,13 @@ QUERY_DEFS = [
             text_field("hpv_4", 4),
             text_field("hpv_5", 5),
             sensor_field(
-                "pv_max_voltage",
+                "hpv_6",
                 6,
                 unit_of_measurement=UNIT_VOLT,
                 accuracy_decimals=1,
                 device_class=DEVICE_CLASS_VOLTAGE,
             ),
-            sensor_field(
-                "pv_temperature",
-                7,
-                unit_of_measurement=UNIT_CELSIUS,
-                accuracy_decimals=0,
-                device_class=DEVICE_CLASS_TEMPERATURE,
-                state_class=STATE_CLASS_MEASUREMENT,
-            ),
+            sensor_field("hpv_7", 7, accuracy_decimals=0),
             sensor_field(
                 "pv_max_power",
                 8,
@@ -1472,8 +1465,23 @@ for entity in TOP_LEVEL_ENTITIES:
     CONFIG_DICT[cv.Optional(entity["key"])] = entity["schema"]
 
 
-CONFIG_SCHEMA = (
-    cv.Schema(CONFIG_DICT).extend(cv.COMPONENT_SCHEMA).extend(uart.UART_DEVICE_SCHEMA)
+def migrate_pv_sensor_keys(config):
+    if not isinstance(config, dict):
+        return config
+    config = config.copy()
+    for old_key, new_key in (
+        ("pv_max_voltage", "hpv_6"),
+        ("pv_temperature", "hpv_7"),
+    ):
+        if old_key in config:
+            cv.has_at_most_one_key(old_key, new_key)(config)
+            config[new_key] = config.pop(old_key)
+    return config
+
+
+CONFIG_SCHEMA = cv.All(
+    migrate_pv_sensor_keys,
+    cv.Schema(CONFIG_DICT).extend(cv.COMPONENT_SCHEMA).extend(uart.UART_DEVICE_SCHEMA),
 )
 
 
